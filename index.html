@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>2D Шутер - Сверхредкие бойцы + карты</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+        }
+        .game-container {
+            background: #0f0f1a;
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 12px;
+            box-shadow: 0 0 0 2px #ffd700, 0 0 0 5px #2a2a3a;
+            cursor: crosshair;
+        }
+        .controls-info {
+            color: #aaa;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .controls-info span {
+            background: #2a2a3a;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="1200" height="700"></canvas>
+    </div>
+    <div class="controls-info">
+        <span>🎮 WASD / Стрелки - движение</span>
+        <span>🖱️ ЛКМ (зажать) - стрельба в курсор</span>
+        <span>⏸️ ESC или кнопка Меню - пауза</span>
+        <span>⭐ Обычные +5, Редкие +10, Сверхредкие +15</span>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- НАСТРОЙКИ ----------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const W = 1200, H = 700;
+        canvas.width = W;
+        canvas.height = H;
+        
+        // ---------- ДАННЫЕ БОЙЦОВ ----------
+        const BRAWLERS = {
+            "Шелли": { name: "Шелли", hp: 20, damage: 2, cost: 0, rarity: "common", emoji: "🔫", desc: "Начальный боец" },
+            "Нита": { name: "Нита", hp: 30, damage: 4, cost: 25, rarity: "rare", emoji: "🐻", desc: "Призывает медведя" },
+            "Кольт": { name: "Кольт", hp: 25, damage: 6, cost: 25, rarity: "rare", emoji: "🤠", desc: "Высокий урон" },
+            "Булл": { name: "Булл", hp: 35, damage: 3, cost: 25, rarity: "rare", emoji: "🐂", desc: "Танк" },
+            "Брок": { name: "Брок", hp: 27, damage: 5, cost: 25, rarity: "rare", emoji: "🚀", desc: "Ракетная установка" },
+            "Эль Примо": { name: "Эль Примо", hp: 37, damage: 3, cost: 25, rarity: "rare", emoji: "💪", desc: "Ближний бой" },
+            "Барли": { name: "Барли", hp: 25, damage: 5, cost: 25, rarity: "rare", emoji: "🍹", desc: "Метатель" },
+            "Поко": { name: "Поко", hp: 30, damage: 5, cost: 25, rarity: "rare", emoji: "🎸", desc: "Музыкант" },
+            "Роза": { name: "Роза", hp: 30, damage: 4, cost: 25, rarity: "rare", emoji: "🌹", desc: "Щит" },
+            "Джесси": { name: "Джесси", hp: 40, damage: 45, cost: 75, rarity: "ultra_rare", emoji: "⚡", desc: "Электро-пушка" },
+            "Диномайк": { name: "Диномайк", hp: 35, damage: 43, cost: 75, rarity: "ultra_rare", emoji: "💣", desc: "Динамит" },
+            "Тик": { name: "Тик", hp: 35, damage: 40, cost: 75, rarity: "ultra_rare", emoji: "🤖", desc: "Мина-голова" },
+            "8-бит": { name: "8-бит", hp: 50, damage: 40, cost: 75, rarity: "ultra_rare", emoji: "🕹️", desc: "Аркадный боец" },
+            "Рико": { name: "Рико", hp: 40, damage: 45, cost: 75, rarity: "ultra_rare", emoji: "🎯", desc: "Рикошет" },
+            "Дэррил": { name: "Дэррил", hp: 45, damage: 38, cost: 75, rarity: "ultra_rare", emoji: "🏴‍☠️", desc: "Бочка" },
+            "Пенни": { name: "Пенни", hp: 35, damage: 40, cost: 75, rarity: "ultra_rare", emoji: "💰", desc: "Монетная пушка" },
+            "Карл": { name: "Карл", hp: 40, damage: 40, cost: 75, rarity: "ultra_rare", emoji: "⛏️", desc: "Кирка" },
+            "Джеки": { name: "Джеки", hp: 50, damage: 35, cost: 75, rarity: "ultra_rare", emoji: "🔨", desc: "Отбойный молоток" },
+            "Гас": { name: "Гас", hp: 40, damage: 40, cost: 75, rarity: "ultra_rare", emoji: "🍬", desc: "Конфетный стрелок" }
+        };
+        
+        const BOXES = {
+            "Старр дроп": { cost: 100, minGems: 1, maxGems: 6, chance: 10, ultraChance: 7 },
+            "Хаос дроп": { cost: 250, minGems: 3, maxGems: 9, chance: 15, ultraChance: 10 },
+            "Ультра хаос дроп": { cost: 1000, minGems: 7, maxGems: 15, chance: 40, ultraChance: 25 },
+            "Мегаящик": { cost: 500, minGems: 5, maxGems: 9, chance: 30, ultraChance: 15 },
+            "Омегаящик": { cost: 1500, minGems: 10, maxGems: 20, chance: 47, ultraChance: 30 },
+            "Ультраящик": { cost: 5000, minGems: 45, maxGems: 100, chance: 85, ultraChance: 65 }
+        };
+        
+        // ---------- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------
+        let player = {
+            x: W/2, y: H/2,
+            radius: 16,
+            nickname: "Игрок",
+            brawlerId: "Шелли",
+            hp: 20,
+            maxHp: 20,
+            damage: 2,
+            speed: 5,
+            score: 0,
+            gems: 0
+        };
+        
+        let ownedBrawlers = ["Шелли"];
+        let enemies = [];
+        let bullets = [];
+        let gemsItems = [];
+        
+        let wave = 1;
+        let enemiesLimit = 20;
+        let enemiesKilledThisWave = 0;
+        let waveActive = true;
+        let waveTransitionTimer = 0;
+        let waveMessage = "";
+        let waveMessageTimer = 0;
+        
+        let spawnTimer = 0;
+        const SPAWN_COOLDOWN_FRAMES = 120;
+        const WAVE_TRANSITION_FRAMES = 300;
+        
+        let shootCooldown = 0;
+        let mouseHeld = false;
+        let mouseX = W/2, mouseY = H/2;
+        
+        let gameRunning = true;
+        let paused = false;
+        let gameOver = false;
+        
+        let notification = "";
+        let notificationTimer = 0;
+        
+        let menuButtonRect = { x: W - 80, y: 10, w: 70, h: 30 };
+        let boxButtons = [];
+        
+        let pauseMenuOpen = false;
+        let pauseMenuButtons = [];
+        
+        let shopMenuOpen = false;
+        let shopButtons = [];
+        
+        // --- КАРТЫ И ДЕКОРАЦИИ (УМЕНЬШЕНЫ) ---
+        const MAPS = ['default', 'meadow', 'desert', 'winter'];
+        let currentMap = 'default';
+        let decorations = [];
+        
+        let recordScore = 0;
+        let recordGems = 0;
+        
+        // ---------- ГЕНЕРАЦИЯ ДЕКОРАЦИЙ (УМЕНЬШЕННЫЕ РАЗМЕРЫ) ----------
+        function generateDecorations(mapType) {
+            const decs = [];
+            if (mapType === 'meadow') {
+                // Трава - круги поменьше
+                for (let i = 0; i < 25; i++) {
+                    decs.push({
+                        type: 'grass',
+                        x: 30 + Math.random() * (W - 60),
+                        y: 30 + Math.random() * (H - 60),
+                        radius: 10 + Math.random() * 15,
+                        color: `rgba(34, 139, 34, ${0.2 + Math.random()*0.3})`
+                    });
+                }
+                // Цветы - маленькие
+                for (let i = 0; i < 35; i++) {
+                    decs.push({
+                        type: 'flower',
+                        x: 20 + Math.random() * (W - 40),
+                        y: 20 + Math.random() * (H - 40),
+                        radius: 5,
+                        color: `hsl(${Math.random()*60 + 300}, 80%, 65%)`
+                    });
+                }
+            } else if (mapType === 'desert') {
+                // Маленькие кактусы
+                for (let i = 0; i < 30; i++) {
+                    decs.push({
+                        type: 'cactus',
+                        x: 30 + Math.random() * (W - 60),
+                        y: 40 + Math.random() * (H - 80),
+                        width: 8 + Math.random() * 10,
+                        height: 15 + Math.random() * 20
+                    });
+                }
+                // Камни поменьше
+                for (let i = 0; i < 20; i++) {
+                    decs.push({
+                        type: 'stone',
+                        x: 20 + Math.random() * (W - 40),
+                        y: 20 + Math.random() * (H - 40),
+                        radius: 5 + Math.random() * 8,
+                        color: '#8B7D6B'
+                    });
+                }
+            } else if (mapType === 'winter') {
+                // Ёлки со снегом (маленькие)
+                for (let i = 0; i < 25; i++) {
+                    decs.push({
+                        type: 'tree',
+                        x: 30 + Math.random() * (W - 60),
+                        y: 40 + Math.random() * (H - 80),
+                        height: 20 + Math.random() * 15,
+                        width: 12 + Math.random() * 10
+                    });
+                }
+                // Снежные пятна
+                for (let i = 0; i < 20; i++) {
+                    decs.push({
+                        type: 'snow',
+                        x: 20 + Math.random() * (W - 40),
+                        y: 20 + Math.random() * (H - 40),
+                        radius: 8 + Math.random() * 15,
+                        color: 'rgba(255,255,255,0.3)'
+                    });
+                }
+            }
+            return decs;
+        }
+        
+        function changeMap(newMap) {
+            if (!MAPS.includes(newMap)) return;
+            currentMap = newMap;
+            decorations = generateDecorations(currentMap);
+            showNotification(`Карта изменена: ${newMap === 'meadow' ? '🌿 Луг' : newMap === 'desert' ? '🏜️ Пустыня' : newMap === 'winter' ? '❄️ Зима' : '🌌 Стандартная'}`);
+            saveProgress();
+        }
+        
+        // ---------- СОХРАНЕНИЕ / ЗАГРУЗКА (ИСПРАВЛЕНО) ----------
+        const SAVE_KEY = 'brawlShooterSave_v2';
+        
+        function saveProgress() {
+            const saveData = {
+                score: player.score,
+                gems: player.gems,
+                ownedBrawlers: ownedBrawlers,
+                currentBrawler: player.brawlerId,
+                currentMap: currentMap,
+                recordScore: Math.max(recordScore, player.score),
+                recordGems: Math.max(recordGems, player.gems),
+                wave: wave,
+                enemiesLimit: enemiesLimit
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+            recordScore = saveData.recordScore;
+            recordGems = saveData.recordGems;
+        }
+        
+        function loadProgress() {
+            const saved = localStorage.getItem(SAVE_KEY);
+            if (!saved) {
+                decorations = generateDecorations('default');
+                return false;
+            }
+            try {
+                const data = JSON.parse(saved);
+                player.score = data.score || 0;
+                player.gems = data.gems || 0;
+                ownedBrawlers = data.ownedBrawlers || ["Шелли"];
+                const savedBrawler = data.currentBrawler || "Шелли";
+                if (ownedBrawlers.includes(savedBrawler)) {
+                    player.brawlerId = savedBrawler;
+                } else {
+                    player.brawlerId = "Шелли";
+                }
+                const b = BRAWLERS[player.brawlerId];
+                player.maxHp = b.hp;
+                player.damage = b.damage;
+                if (player.hp > player.maxHp) player.hp = player.maxHp;
+                
+                currentMap = data.currentMap || 'default';
+                decorations = generateDecorations(currentMap);
+                
+                recordScore = data.recordScore || player.score;
+                recordGems = data.recordGems || player.gems;
+                
+                wave = data.wave || 1;
+                enemiesLimit = data.enemiesLimit || 20;
+                
+                showNotification('Прогресс загружен');
+                return true;
+            } catch(e) {
+                console.warn('Ошибка загрузки');
+                return false;
+            }
+        }
+        
+        function resetProgress() {
+            localStorage.removeItem(SAVE_KEY);
+            ownedBrawlers = ["Шелли"];
+            player.brawlerId = "Шелли";
+            player.score = 0;
+            player.gems = 0;
+            recordScore = 0;
+            recordGems = 0;
+            currentMap = 'default';
+            decorations = generateDecorations('default');
+            const b = BRAWLERS["Шелли"];
+            player.maxHp = b.hp;
+            player.damage = b.damage;
+            player.hp = player.maxHp;
+            player.x = W/2; player.y = H/2;
+            enemies = [];
+            bullets = [];
+            gemsItems = [];
+            wave = 1;
+            enemiesLimit = 20;
+            enemiesKilledThisWave = 0;
+            waveActive = true;
+            gameOver = false;
+            paused = false;
+            pauseMenuOpen = false;
+            shopMenuOpen = false;
+            showNotification('Прогресс сброшен');
+            saveProgress();
+        }
+        
+        // Автосохранение при важных действиях
+        function afterImportantChange() {
+            saveProgress();
+        }
+        
+        // ---------- ПЕРЕОПРЕДЕЛЕНИЕ ФУНКЦИЙ ДЛЯ АВТОСОХРАНЕНИЯ ----------
+        const originalOpenBox = openBox;
+        openBox = function(boxName) {
+            const result = originalOpenBox.call(this, boxName);
+            if (result) afterImportantChange();
+            return result;
+        };
+        
+        const originalBuyBrawler = buyBrawler;
+        buyBrawler = function(brawlerName) {
+            const result = originalBuyBrawler.call(this, brawlerName);
+            if (result) afterImportantChange();
+            return result;
+        };
+        
+        const originalApplyBrawler = applyBrawler;
+        applyBrawler = function(brawlerName) {
+            const result = originalApplyBrawler.call(this, brawlerName);
+            if (result) afterImportantChange();
+            return result;
+        };
+        
+        const originalUpdateGems = updateGems;
+        updateGems = function() {
+            const beforeGems = player.gems;
+            originalUpdateGems.call(this);
+            if (player.gems !== beforeGems) {
+                afterImportantChange();
+            }
+        };
+        
+        const originalUpdateWaveLogic = updateWaveLogic;
+        updateWaveLogic = function() {
+            originalUpdateWaveLogic.call(this);
+            if (!waveActive && waveTransitionTimer === WAVE_TRANSITION_FRAMES - 1) {
+                afterImportantChange();
+            }
+        };
+        
+        // ---------- ОТРИСОВКА ФОНА И ДЕКОРАЦИЙ (МАЛЕНЬКИЕ) ----------
+        function drawBackgroundAndDecorations() {
+            if (currentMap === 'meadow') {
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, '#7CFC00');
+                grad.addColorStop(1, '#228B22');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+            } else if (currentMap === 'desert') {
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, '#F4A460');
+                grad.addColorStop(1, '#D2B48C');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+            } else if (currentMap === 'winter') {
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, '#B0E0E6');
+                grad.addColorStop(1, '#87CEEB');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+            } else {
+                ctx.fillStyle = "#1a2a32";
+                ctx.fillRect(0, 0, W, H);
+            }
+            
+            for (let d of decorations) {
+                if (d.type === 'grass') {
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.radius, 0, Math.PI*2);
+                    ctx.fillStyle = d.color;
+                    ctx.fill();
+                } else if (d.type === 'flower') {
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y);
+                    ctx.lineTo(d.x - 2, d.y + 8);
+                    ctx.lineTo(d.x + 2, d.y + 8);
+                    ctx.fillStyle = '#228B22';
+                    ctx.fill();
+                    ctx.fillStyle = d.color;
+                    for (let i=0; i<5; i++) {
+                        const angle = i * Math.PI*2/5;
+                        const px = d.x + Math.cos(angle)*4;
+                        const py = d.y + Math.sin(angle)*4;
+                        ctx.beginPath();
+                        ctx.arc(px, py, 3, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, 2.5, 0, Math.PI*2);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fill();
+                } else if (d.type === 'cactus') {
+                    ctx.fillStyle = '#2E8B57';
+                    ctx.fillRect(d.x - d.width/2, d.y - d.height, d.width, d.height);
+                    ctx.fillRect(d.x - d.width/2 - 5, d.y - d.height + 8, 5, 8);
+                    ctx.fillRect(d.x + d.width/2, d.y - d.height + 4, 5, 8);
+                    ctx.fillStyle = '#F0E68C';
+                    for (let i=0; i<3; i++) {
+                        ctx.beginPath();
+                        ctx.arc(d.x - d.width/2 + 3 + i*3, d.y - d.height + 5, 1.5, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                } else if (d.type === 'stone') {
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.radius, 0, Math.PI*2);
+                    ctx.fillStyle = d.color;
+                    ctx.fill();
+                    ctx.strokeStyle = '#5D4E37';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                } else if (d.type === 'tree') {
+                    // Ствол
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(d.x - 3, d.y - d.height + 5, 6, d.height - 5);
+                    // Крона (три яруса)
+                    ctx.fillStyle = '#228B22';
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y - d.height);
+                    ctx.lineTo(d.x - d.width/2, d.y - d.height + 12);
+                    ctx.lineTo(d.x + d.width/2, d.y - d.height + 12);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y - d.height - 5);
+                    ctx.lineTo(d.x - d.width/2 + 2, d.y - d.height + 5);
+                    ctx.lineTo(d.x + d.width/2 - 2, d.y - d.height + 5);
+                    ctx.fill();
+                    // Снег на ветках
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.beginPath();
+                    ctx.arc(d.x - 2, d.y - d.height + 2, 3, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(d.x + 2, d.y - d.height + 2, 3, 0, Math.PI*2);
+                    ctx.fill();
+                } else if (d.type === 'snow') {
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.radius, 0, Math.PI*2);
+                    ctx.fillStyle = d.color;
+                    ctx.fill();
+                }
+            }
+        }
+        
+        // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
+        function showNotification(msg) {
+            notification = msg;
+            notificationTimer = 80;
+        }
+        
+        function showWaveMessage(msg) {
+            waveMessage = msg;
+            waveMessageTimer = 90;
+        }
+        
+        function getEnemyHp() {
+            return 10 + (wave - 1) * 2;
+        }
+        
+        function getPointsForKill(brawlerRarity) {
+            if (brawlerRarity === "ultra_rare") return 15;
+            if (brawlerRarity === "rare") return 10;
+            return 5;
+        }
+        
+        function applyBrawler(brawlerName) {
+            if (!ownedBrawlers.includes(brawlerName)) {
+                showNotification(`Сначала купите бойца ${brawlerName}`);
+                return false;
+            }
+            resetGameWithBrawler(brawlerName);
+            showNotification(`Боец ${brawlerName} ${BRAWLERS[brawlerName].emoji} применён!`);
+            return true;
+        }
+        
+        function resetGameWithBrawler(brawlerName) {
+            const b = BRAWLERS[brawlerName];
+            player = {
+                x: W/2, y: H/2,
+                radius: 16,
+                nickname: "Игрок",
+                brawlerId: brawlerName,
+                hp: b.hp,
+                maxHp: b.hp,
+                damage: b.damage,
+                speed: 5,
+                score: player.score,
+                gems: player.gems
+            };
+            enemies = [];
+            bullets = [];
+            gemsItems = [];
+            wave = 1;
+            enemiesLimit = 20;
+            enemiesKilledThisWave = 0;
+            waveActive = true;
+            waveTransitionTimer = 0;
+            spawnTimer = 0;
+            gameOver = false;
+            gameRunning = true;
+            paused = false;
+            pauseMenuOpen = false;
+            shopMenuOpen = false;
+            afterImportantChange();
+        }
+        
+        function resetGame() {
+            resetGameWithBrawler("Шелли");
+        }
+        
+        function spawnEnemy() {
+            if (!waveActive) return;
+            if (enemiesKilledThisWave >= enemiesLimit) return;
+            if (enemies.length >= enemiesLimit) return;
+            
+            let side = Math.floor(Math.random() * 4);
+            let x, y;
+            if(side === 0) { x = -30; y = Math.random() * H; }
+            else if(side === 1) { x = W + 30; y = Math.random() * H; }
+            else if(side === 2) { x = Math.random() * W; y = -30; }
+            else { x = Math.random() * W; y = H + 30; }
+            
+            const hp = getEnemyHp();
+            enemies.push({
+                x: x, y: y, radius: 15,
+                hp: hp, maxHp: hp,
+                damage: 2,
+                speed: 2 + Math.min(3, wave * 0.05),
+                nickname: `Враг_${Math.floor(Math.random()*1000)}`
+            });
+        }
+        
+        function updateWaveLogic() {
+            if (gameOver || paused || shopMenuOpen) return;
+            
+            if (!waveActive) {
+                if (waveTransitionTimer > 0) {
+                    waveTransitionTimer--;
+                    if (waveTransitionTimer === 0) {
+                        waveActive = true;
+                        spawnTimer = 0;
+                        showWaveMessage(`ВОЛНА ${wave} НАЧАЛАСЬ! (нужно убить ${enemiesLimit} врагов)`);
+                    }
+                }
+                return;
+            }
+            
+            if (enemiesKilledThisWave < enemiesLimit && enemies.length < enemiesLimit && spawnTimer <= 0) {
+                spawnEnemy();
+                spawnTimer = SPAWN_COOLDOWN_FRAMES;
+            }
+            if (spawnTimer > 0) spawnTimer--;
+            
+            if (enemiesKilledThisWave >= enemiesLimit && enemies.length === 0) {
+                waveActive = false;
+                waveTransitionTimer = WAVE_TRANSITION_FRAMES;
+                wave++;
+                enemiesLimit++;
+                enemiesKilledThisWave = 0;
+                showWaveMessage(`ВОЛНА ${wave-1} ЗАВЕРШЕНА! Следующая через 5 сек (нужно убить ${enemiesLimit} врагов)`);
+                
+                let heal = Math.floor(player.maxHp * 0.2);
+                player.hp = Math.min(player.maxHp, player.hp + heal);
+                showNotification(`+${heal} HP восстановлено`);
+                afterImportantChange();
+            }
+        }
+        
+        function updatePlayerMovement() {
+            const keys = {};
+            window.keyState && window.keyState.forEach((v,k)=> keys[k]=v);
+            let moveX = 0, moveY = 0;
+            if(keys['ArrowLeft'] || keys['KeyA']) moveX = -1;
+            if(keys['ArrowRight'] || keys['KeyD']) moveX = 1;
+            if(keys['ArrowUp'] || keys['KeyW']) moveY = -1;
+            if(keys['ArrowDown'] || keys['KeyS']) moveY = 1;
+            if(moveX !== 0 || moveY !== 0) {
+                const len = Math.hypot(moveX, moveY);
+                moveX /= len; moveY /= len;
+                player.x += moveX * player.speed;
+                player.y += moveY * player.speed;
+            }
+            player.x = Math.min(Math.max(player.x, player.radius+5), W - player.radius-5);
+            player.y = Math.min(Math.max(player.y, player.radius+50), H - player.radius-10);
+        }
+        
+        function updateShooting() {
+            if(shootCooldown > 0) shootCooldown--;
+            if(mouseHeld && !paused && !shopMenuOpen && gameRunning && !gameOver && waveActive && shootCooldown === 0) {
+                const dx = mouseX - player.x;
+                const dy = mouseY - player.y;
+                const dist = Math.hypot(dx, dy);
+                if(dist > 0.01) {
+                    const vx = dx / dist * 12;
+                    const vy = dy / dist * 12;
+                    bullets.push({
+                        x: player.x, y: player.y, radius: 5,
+                        vx: vx, vy: vy,
+                        damage: player.damage
+                    });
+                    shootCooldown = 12;
+                }
+            }
+        }
+        
+        function updateEnemies() {
+            if(paused || shopMenuOpen || !waveActive) return;
+            for(let i=0; i<enemies.length; i++) {
+                const e = enemies[i];
+                const dx = player.x - e.x;
+                const dy = player.y - e.y;
+                const dist = Math.hypot(dx, dy);
+                if(dist > 0.01) {
+                    e.x += dx / dist * e.speed;
+                    e.y += dy / dist * e.speed;
+                }
+                const collideDist = player.radius + e.radius;
+                if(Math.hypot(player.x - e.x, player.y - e.y) < collideDist) {
+                    player.hp -= e.damage;
+                    enemies.splice(i,1);
+                    i--;
+                    if(player.hp <= 0) { gameOver = true; gameRunning = false; afterImportantChange(); }
+                    continue;
+                }
+            }
+        }
+        
+        function updateBullets() {
+            for(let i=0; i<bullets.length; i++) {
+                const b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                if(b.x < -100 || b.x > W+100 || b.y < -100 || b.y > H+100) {
+                    bullets.splice(i,1);
+                    i--;
+                    continue;
+                }
+                let hit = false;
+                for(let j=0; j<enemies.length; j++) {
+                    const e = enemies[j];
+                    if(Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                        e.hp -= b.damage;
+                        hit = true;
+                        if(e.hp <= 0) {
+                            enemies.splice(j,1);
+                            enemiesKilledThisWave++;
+                            const currentBrawler = BRAWLERS[player.brawlerId];
+                            const points = getPointsForKill(currentBrawler.rarity);
+                            player.score += points;
+                            
+                            if(Math.random() < 0.3) {
+                                gemsItems.push({
+                                    x: e.x, y: e.y, radius: 7,
+                                    value: Math.floor(Math.random()*3)+1
+                                });
+                            }
+                            j--;
+                        }
+                        break;
+                    }
+                }
+                if(hit) {
+                    bullets.splice(i,1);
+                    i--;
+                }
+            }
+        }
+        
+        function updateGems() {
+            for(let i=0; i<gemsItems.length; i++) {
+                const g = gemsItems[i];
+                if(Math.hypot(player.x - g.x, player.y - g.y) < player.radius + g.radius) {
+                    player.gems += g.value;
+                    gemsItems.splice(i,1);
+                    i--;
+                }
+            }
+        }
+        
+        function gameUpdate() {
+            if(!gameRunning || gameOver || paused || shopMenuOpen) return;
+            updatePlayerMovement();
+            updateShooting();
+            updateWaveLogic();
+            updateEnemies();
+            updateBullets();
+            updateGems();
+        }
+        
+        function openBox(boxName) {
+            const box = BOXES[boxName];
+            if(!box) return false;
+            if(player.score < box.cost) {
+                showNotification(`❌ Не хватает очков! Нужно ${box.cost}`);
+                return false;
+            }
+            player.score -= box.cost;
+            let gemsDrop = Math.floor(Math.random() * (box.maxGems - box.minGems + 1) + box.minGems);
+            let ultraMod = box.ultraChance * (1 - (gemsDrop / 200));
+            let rareMod = box.chance * (1 - (gemsDrop / 200));
+            ultraMod = Math.max(1, Math.min(85, ultraMod));
+            rareMod = Math.max(5, Math.min(85, rareMod));
+            
+            const rollUltra = Math.random() * 100;
+            let unlockedBrawler = null;
+            if(rollUltra < ultraMod) {
+                const ultraBrawlers = Object.keys(BRAWLERS).filter(name => BRAWLERS[name].rarity === "ultra_rare" && !ownedBrawlers.includes(name));
+                if(ultraBrawlers.length > 0) {
+                    unlockedBrawler = ultraBrawlers[Math.floor(Math.random() * ultraBrawlers.length)];
+                    ownedBrawlers.push(unlockedBrawler);
+                }
+            }
+            if(!unlockedBrawler) {
+                const rollRare = Math.random() * 100;
+                if(rollRare < rareMod) {
+                    const rareBrawlers = Object.keys(BRAWLERS).filter(name => BRAWLERS[name].rarity === "rare" && !ownedBrawlers.includes(name));
+                    if(rareBrawlers.length > 0) {
+                        unlockedBrawler = rareBrawlers[Math.floor(Math.random() * rareBrawlers.length)];
+                        ownedBrawlers.push(unlockedBrawler);
+                    }
+                }
+            }
+            
+            player.gems += gemsDrop;
+            let msg = `🎁 ${boxName}: +${gemsDrop} 💎 гемов!`;
+            if(unlockedBrawler) msg += ` 🌟 И выпал новый боец: ${unlockedBrawler}!`;
+            showNotification(msg);
+            return true;
+        }
+        
+        function buyBrawler(brawlerName) {
+            const b = BRAWLERS[brawlerName];
+            if(!b) return false;
+            if(ownedBrawlers.includes(brawlerName)) {
+                showNotification(`У вас уже есть ${brawlerName}`);
+                return false;
+            }
+            if(player.gems < b.cost) {
+                showNotification(`❌ Не хватает гемов! Нужно ${b.cost} 💎 (у вас ${player.gems})`);
+                return false;
+            }
+            player.gems -= b.cost;
+            ownedBrawlers.push(brawlerName);
+            showNotification(`✅ Куплен боец: ${brawlerName} ${b.emoji}!`);
+            return true;
+        }
+        
+        // ---------- ОТРИСОВКА ИГРОВЫХ ОБЪЕКТОВ ----------
+        function drawPlayer() {
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+            ctx.fillStyle = "#3a86ff";
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            const hpPercent = player.hp / player.maxHp;
+            ctx.fillStyle = "#cc3333";
+            ctx.fillRect(player.x-20, player.y-18, 40, 5);
+            ctx.fillStyle = "#33cc33";
+            ctx.fillRect(player.x-20, player.y-18, 40 * hpPercent, 5);
+            ctx.font = "bold 12px 'Segoe UI'";
+            ctx.fillStyle = "white";
+            ctx.fillText(player.nickname, player.x-25, player.y-22);
+            ctx.font = "10px monospace";
+            ctx.fillStyle = "#ffdd88";
+            ctx.fillText(BRAWLERS[player.brawlerId]?.emoji + " " + player.brawlerId, player.x-20, player.y+22);
+        }
+        
+        function drawEnemies() {
+            for(let e of enemies) {
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+                ctx.fillStyle = "#e63946";
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "10px 'Segoe UI'";
+                ctx.fillText(e.nickname, e.x-25, e.y-16);
+                const hpPercent = e.hp / e.maxHp;
+                ctx.fillStyle = "#444";
+                ctx.fillRect(e.x-18, e.y-12, 36, 4);
+                ctx.fillStyle = "#2ecc71";
+                ctx.fillRect(e.x-18, e.y-12, 36 * hpPercent, 4);
+            }
+        }
+        
+        function drawBullets() {
+            for(let b of bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
+                ctx.fillStyle = "#ffcc44";
+                ctx.fill();
+            }
+        }
+        
+        function drawGems() {
+            for(let g of gemsItems) {
+                ctx.beginPath();
+                ctx.arc(g.x, g.y, g.radius, 0, Math.PI*2);
+                ctx.fillStyle = "#0ff";
+                ctx.fill();
+                ctx.fillStyle = "white";
+                ctx.font = "bold 9px monospace";
+                ctx.fillText(g.value, g.x-4, g.y+3);
+            }
+        }
+        
+        function drawUI() {
+            ctx.font = "bold 16px 'Segoe UI'";
+            ctx.fillStyle = "#ffd966";
+            ctx.fillText(`⭐ Очки: ${player.score}`, 15, 35);
+            ctx.fillStyle = "#55ffaa";
+            ctx.fillText(`💎 Гемы: ${player.gems}`, 15, 65);
+            ctx.fillStyle = "#ffaa66";
+            ctx.fillText(`🌊 Волна ${wave} | 🗡️ Убито: ${enemiesKilledThisWave}/${enemiesLimit}`, 15, 95);
+            ctx.fillStyle = "#ff7777";
+            ctx.fillText(`❤️ ${player.hp}/${player.maxHp}`, 15, 125);
+            
+            ctx.font = "12px monospace";
+            ctx.fillStyle = "#cccccc";
+            ctx.fillText(`🏆 Рекорд очков: ${recordScore}`, 15, 155);
+            ctx.fillText(`💎 Рекорд гемов: ${recordGems}`, 15, 175);
+            
+            ctx.fillStyle = "#2c3e66";
+            ctx.fillRect(menuButtonRect.x, menuButtonRect.y, menuButtonRect.w, menuButtonRect.h);
+            ctx.fillStyle = "white";
+            ctx.font = "12px Arial";
+            ctx.fillText("Меню", menuButtonRect.x+18, menuButtonRect.y+20);
+            
+            let startX = 15;
+            let startY = H - 60;
+            boxButtons = [];
+            const boxNames = Object.keys(BOXES);
+            for(let i=0; i<boxNames.length; i++) {
+                const name = boxNames[i];
+                const b = BOXES[name];
+                const xPos = startX + i*120;
+                if(xPos+110 > W) break;
+                const color = player.score >= b.cost ? "#e6b422" : "#555555";
+                ctx.fillStyle = color;
+                ctx.fillRect(xPos, startY, 110, 35);
+                ctx.fillStyle = "white";
+                ctx.font = "10px Arial";
+                ctx.fillText(name, xPos+5, startY+15);
+                ctx.font = "bold 9px monospace";
+                ctx.fillStyle = "#ffd966";
+                ctx.fillText(`${b.cost}⭐`, xPos+70, startY+27);
+                boxButtons.push({ name: name, rect: { x: xPos, y: startY, w: 110, h: 35 } });
+            }
+            
+            if(waveMessageTimer > 0) {
+                ctx.fillStyle = "rgba(0,0,0,0.7)";
+                ctx.fillRect(W/2-200, H/2-50, 400, 50);
+                ctx.fillStyle = "#ffcc44";
+                ctx.font = "bold 20px Arial";
+                ctx.fillText(waveMessage, W/2-150, H/2-15);
+                waveMessageTimer--;
+            }
+        }
+        
+        function drawPauseMenu() {
+            ctx.fillStyle = "rgba(0,0,0,0.85)";
+            ctx.fillRect(0,0,W,H);
+            ctx.fillStyle = "#fff4cc";
+            ctx.font = "bold 28px monospace";
+            ctx.fillText("⏸ ПАУЗА", W/2-70, H/2-140);
+            
+            const btns = [
+                { text: "▶ Продолжить", action: "resume", y: H/2-80 },
+                { text: "🛒 Купить бойцов", action: "shop", y: H/2-20 },
+                { text: "🌍 Сменить карту", action: "map", y: H/2+40 },
+                { text: "🔄 Сбросить прогресс", action: "reset", y: H/2+100 },
+                { text: "🚪 Выйти в меню", action: "exit", y: H/2+160 }
+            ];
+            pauseMenuButtons = [];
+            for(let btn of btns) {
+                const btnX = W/2-100;
+                ctx.fillStyle = "#3a3a55";
+                ctx.fillRect(btnX, btn.y, 200, 45);
+                ctx.fillStyle = "#eee";
+                ctx.font = "16px Arial";
+                ctx.fillText(btn.text, btnX+25, btn.y+30);
+                pauseMenuButtons.push({ action: btn.action, rect: { x: btnX, y: btn.y, w: 200, h: 45 } });
+            }
+        }
+        
+        function drawShopMenu() {
+            ctx.fillStyle = "rgba(0,0,0,0.92)";
+            ctx.fillRect(0,0,W,H);
+            
+            ctx.fillStyle = "#ffcc66";
+            ctx.font = "bold 24px monospace";
+            ctx.fillText("🛒 МАГАЗИН БОЙЦОВ", W/2-130, 50);
+            ctx.font = "14px Arial";
+            ctx.fillStyle = "#aaaaff";
+            ctx.fillText(`💰 Ваши гемы: ${player.gems}`, W/2-80, 90);
+            
+            ctx.fillStyle = "#cc5555";
+            ctx.fillRect(W-100, 10, 80, 30);
+            ctx.fillStyle = "white";
+            ctx.font = "12px Arial";
+            ctx.fillText("← Назад", W-90, 30);
+            const backRect = { x: W-100, y: 10, w: 80, h: 30 };
+            
+            shopButtons = [];
+            let startX = 50;
+            let startY = 120;
+            let col = 0;
+            let row = 0;
+            
+            for(let name of Object.keys(BRAWLERS)) {
+                const b = BRAWLERS[name];
+                const isOwned = ownedBrawlers.includes(name);
+                const canBuy = !isOwned && player.gems >= b.cost;
+                
+                const x = startX + col * 210;
+                const y = startY + row * 100;
+                if(x + 200 < W) {
+                    if(b.rarity === "ultra_rare") ctx.fillStyle = isOwned ? "#3a1a5a" : (canBuy ? "#6a2a8a" : "#4a2a6a");
+                    else if(b.rarity === "rare") ctx.fillStyle = isOwned ? "#2a5a2a" : (canBuy ? "#3a7a3a" : "#4a6a4a");
+                    else ctx.fillStyle = isOwned ? "#5a5a2a" : (canBuy ? "#7a7a3a" : "#6a6a4a");
+                    ctx.fillRect(x, y, 190, 85);
+                    ctx.strokeStyle = "#ffd700";
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, 190, 85);
+                    
+                    ctx.font = "bold 16px monospace";
+                    ctx.fillStyle = "#ffdd88";
+                    ctx.fillText(`${b.emoji} ${b.name}`, x+10, y+25);
+                    ctx.font = "11px Arial";
+                    ctx.fillStyle = "#ccccff";
+                    ctx.fillText(`❤️ ${b.hp}  ⚔️ ${b.damage}`, x+10, y+48);
+                    ctx.fillStyle = "#88ff88";
+                    ctx.fillText(`💰 ${b.cost} гемов`, x+10, y+68);
+                    
+                    if(isOwned) {
+                        ctx.fillStyle = "#ffaa44";
+                        ctx.fillRect(x+120, y+55, 60, 22);
+                        ctx.fillStyle = "black";
+                        ctx.font = "bold 8px Arial";
+                        ctx.fillText("ПРИМЕНИТЬ", x+125, y+71);
+                        shopButtons.push({ name: name, rect: { x: x+120, y: y+55, w: 60, h: 22 }, type: "apply" });
+                    } else {
+                        const btnColor = canBuy ? "#4caf50" : "#666666";
+                        ctx.fillStyle = btnColor;
+                        ctx.fillRect(x+120, y+55, 60, 22);
+                        ctx.fillStyle = "white";
+                        ctx.font = "9px Arial";
+                        ctx.fillText(canBuy ? "Купить" : "❌", x+135, y+71);
+                        shopButtons.push({ name: name, rect: { x: x+120, y: y+55, w: 60, h: 22 }, type: "buy", canBuy: canBuy });
+                    }
+                    
+                    col++;
+                    if(col >= 4) { col = 0; row++; }
+                }
+            }
+            return backRect;
+        }
+        
+        function drawNotification() {
+            if(notificationTimer > 0) {
+                ctx.fillStyle = "rgba(0,0,0,0.7)";
+                ctx.fillRect(W/2-150, 50, 300, 35);
+                ctx.fillStyle = "#ffcc44";
+                ctx.font = "14px Arial";
+                ctx.fillText(notification, W/2-130, 73);
+                notificationTimer--;
+            }
+        }
+        
+        function drawGameOver() {
+            ctx.fillStyle = "rgba(0,0,0,0.85)";
+            ctx.fillRect(0,0,W,H);
+            ctx.fillStyle = "#ff5555";
+            ctx.font = "bold 32px monospace";
+            ctx.fillText("GAME OVER", W/2-100, H/2-30);
+            ctx.fillStyle = "white";
+            ctx.font = "18px monospace";
+            ctx.fillText("Нажмите R чтобы перезапустить", W/2-150, H/2+30);
+        }
+        
+        function draw() {
+            ctx.clearRect(0,0,W,H);
+            drawBackgroundAndDecorations();
+            
+            if(!shopMenuOpen && !paused) {
+                drawEnemies();
+                drawBullets();
+                drawGems();
+                drawPlayer();
+                drawUI();
+            } else if(paused && !shopMenuOpen) {
+                drawEnemies();
+                drawBullets();
+                drawGems();
+                drawPlayer();
+                drawUI();
+                drawPauseMenu();
+            } else if(shopMenuOpen) {
+                drawShopMenu();
+            }
+            
+            drawNotification();
+            if(gameOver) drawGameOver();
+        }
+        
+        // ---------- УПРАВЛЕНИЕ МЕНЮ ----------
+        function togglePause() {
+            if(gameOver || shopMenuOpen) return;
+            if(!paused) {
+                paused = true;
+                pauseMenuOpen = true;
+            } else {
+                if(pauseMenuOpen) {
+                    paused = false;
+                    pauseMenuOpen = false;
+                } else {
+                    paused = false;
+                }
+            }
+        }
+        
+        function openShop() {
+            paused = false;
+            pauseMenuOpen = false;
+            shopMenuOpen = true;
+        }
+        
+        function closeShop() {
+            shopMenuOpen = false;
+        }
+        
+        function handlePauseMenuClick(mx, my) {
+            if(!pauseMenuOpen) return false;
+            for(let btn of pauseMenuButtons) {
+                if(mx >= btn.rect.x && mx <= btn.rect.x+btn.rect.w && my >= btn.rect.y && my <= btn.rect.y+btn.rect.h) {
+                    if(btn.action === "resume") {
+                        paused = false;
+                        pauseMenuOpen = false;
+                    } else if(btn.action === "shop") {
+                        openShop();
+                    } else if(btn.action === "map") {
+                        const idx = MAPS.indexOf(currentMap);
+                        const nextIdx = (idx + 1) % MAPS.length;
+                        changeMap(MAPS[nextIdx]);
+                        paused = false;
+                        pauseMenuOpen = false;
+                    } else if(btn.action === "reset") {
+                        resetProgress();
+                        paused = false;
+                        pauseMenuOpen = false;
+                    } else if(btn.action === "exit") {
+                        resetGame();
+                        paused = false;
+                        pauseMenuOpen = false;
+                        gameOver = false;
+                        gameRunning = true;
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function handleShopClick(mx, my, backRect) {
+            if(mx >= backRect.x && mx <= backRect.x+backRect.w && my >= backRect.y && my <= backRect.y+backRect.h) {
+                closeShop();
+                return true;
+            }
+            for(let btn of shopButtons) {
+                if(mx >= btn.rect.x && mx <= btn.rect.x+btn.rect.w && my >= btn.rect.y && my <= btn.rect.y+btn.rect.h) {
+                    if(btn.type === "buy" && btn.canBuy) {
+                        buyBrawler(btn.name);
+                    } else if(btn.type === "apply") {
+                        applyBrawler(btn.name);
+                        closeShop();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // ---------- СОБЫТИЯ ----------
+        window.keyState = new Map();
+        window.addEventListener('keydown', (e) => {
+            let code = e.code;
+            window.keyState.set(code, true);
+            if(code === 'Escape' && !shopMenuOpen) {
+                e.preventDefault();
+                togglePause();
+            }
+            if(gameOver && code === 'KeyR') {
+                resetGame();
+            }
+        });
+        window.addEventListener('keyup', (e) => { window.keyState.delete(e.code); });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let mx = (e.clientX - rect.left) * scaleX;
+            let my = (e.clientY - rect.top) * scaleY;
+            mx = Math.min(Math.max(mx, 0), W);
+            my = Math.min(Math.max(my, 0), H);
+            mouseX = mx; mouseY = my;
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if(e.button === 0) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                let mx = (e.clientX - rect.left) * scaleX;
+                let my = (e.clientY - rect.top) * scaleY;
+                
+                if(shopMenuOpen) {
+                    const backRect = { x: W-100, y: 10, w: 80, h: 30 };
+                    handleShopClick(mx, my, backRect);
+                    e.preventDefault();
+                    return;
+                }
+                
+                if(mx >= menuButtonRect.x && mx <= menuButtonRect.x+menuButtonRect.w && my >= menuButtonRect.y && my <= menuButtonRect.y+menuButtonRect.h) {
+                    togglePause();
+                    e.preventDefault();
+                    return;
+                }
+                
+                if(paused) {
+                    handlePauseMenuClick(mx, my);
+                    e.preventDefault();
+                    return;
+                }
+                
+                if(gameOver) return;
+                
+                for(let btn of boxButtons) {
+                    if(mx >= btn.rect.x && mx <= btn.rect.x+btn.rect.w && my >= btn.rect.y && my <= btn.rect.y+btn.rect.h) {
+                        openBox(btn.name);
+                        e.preventDefault();
+                        return;
+                    }
+                }
+                
+                mouseHeld = true;
+            }
+        });
+        window.addEventListener('mouseup', (e) => { if(e.button === 0) mouseHeld = false; });
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // Загрузка сохранения
+        loadProgress();
+        (function syncPlayerFromBrawler() {
+            const b = BRAWLERS[player.brawlerId];
+            player.maxHp = b.hp;
+            player.damage = b.damage;
+            if (player.hp > player.maxHp) player.hp = player.maxHp;
+        })();
+        
+        resetGame();
+        
+        function gameLoop() {
+            gameUpdate();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
+    })();
+</script>
+</body>
+</html>
